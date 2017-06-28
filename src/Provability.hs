@@ -55,9 +55,9 @@ infixr 3 /\
 (/\)    = (:/\)
 -- | A convenient alternative to ':->'
 (-->)   = (:->)
--- | reverse implication, i.e. @p <-- q = q :-> p@
+-- | reverse implication, i.e. @p \<-- q = q :-\> p@
 (<--)   = flip (:->)
--- | two-way implication, i.e. @p <-> q = (p :-> q) :/\ (q :-> p)@
+-- | two-way implication, i.e. @p \<-\> q = (p :-> q) :/\\ (q :-> p)@
 p <-> q = (p :-> q) :/\ (q :-> p)
 
 -- | The type of a proposition of provability logic.
