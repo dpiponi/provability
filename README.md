@@ -32,3 +32,15 @@ Find fixed point for p in p ↔ ¬□p:
 
     > fixedpoint $ \p -> Neg (Box p)
     Dia T
+
+Refs:
+
+* https://plato.stanford.edu/entries/logic-provability/
+
+* https://en.wikipedia.org/wiki/Provability_logic
+
+* The Logic of Provability, George Boolos, Cambridge, 1993
+
+* First Order Logic, Raymond Smullyan, Dover
+
+* http://blog.sigfpe.com/2011/04/generalising-godels-theorem-with.html
