@@ -30,6 +30,7 @@ module Provability(interp,
                    (\/), (/\), (-->), (<--), (<->),
                    fixedpoint,
                    beth,
+                   simplify,
                    a, b, c, d, p, q, r, s, t) where
 
 import Control.Applicative
@@ -55,9 +56,9 @@ infixr 3 /\
 (/\)    = (:/\)
 -- | A convenient alternative to ':->'
 (-->)   = (:->)
--- | reverse implication, i.e. @p <-- q = q :-> p@
+-- | reverse implication, i.e. @p \<-- q = q :-\> p@
 (<--)   = flip (:->)
--- | two-way implication, i.e. @p <-> q = (p :-> q) :/\ (q :-> p)@
+-- | two-way implication, i.e. @p \<-\> q = (p :-> q) :/\\ (q :-> p)@
 p <-> q = (p :-> q) :/\ (q :-> p)
 
 -- | The type of a proposition of provability logic.
@@ -97,6 +98,11 @@ instance Show Prop where
     showsPrec p (Letter n) = showParen (p>5) $ showsPrec 6 n
     showsPrec p T          = showString "T"
     showsPrec p F          = showString "F"
+
+-- | Performs basic simplification of propositions.
+--
+-- It performs only one kind of simplification, "constant folding".
+-- It will remove all redundant appearances of 'T' and 'F'.
 simplify p = let simplify' (a :\/ F) = a
                  simplify' (F :\/ b) = b
                  simplify' (a :/\ T) = a
