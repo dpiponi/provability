@@ -25,6 +25,7 @@ Refs:
 {-# LANGUAGE ViewPatterns #-}
 module Provability(interp,
                    valid,
+                   dnf,
                    Prop(..),
                    (\/), (/\), (-->), (<--), (<->),
                    fixedpoint,
@@ -135,7 +136,7 @@ data PropType a = Atomic a
                 | Disjunction a a
                 | Conjunction a a
                 | Provability a
-                | Consistency a
+                | Consistency a deriving Show
 
 instance Functor PropType where
     fmap f (Atomic a)         = Atomic (f a)
@@ -179,6 +180,32 @@ instance PropTypeable Prop where
     positiveComponent a       = a
     negative (Neg _)          = True
     negative _                = False
+
+rmdups :: (Ord a) => [a] -> [a]
+rmdups = map head . group . sort
+
+dnf' :: Prop -> [[Prop]]
+dnf' (propType -> Conjunction a b) = rmdups (dnf' a ++ dnf' b)
+dnf' (propType -> Disjunction a b) = [rmdups (c ++ d) | c <- dnf' a, d <- dnf' b]
+dnf' (propType -> DoubleNegation a) = dnf' a
+dnf' T = []
+dnf' F = [[]]
+dnf' a = [[a]]
+
+foldr1' :: (a -> a -> a) -> a -> [a] -> a
+foldr1' _ e [] = e
+foldr1' m _ a = foldr1 m a
+
+-- | Put proposition into disjunctive normal form.
+-- Only does minimal simplification.
+-- Doesn't recurse into 'Box' or 'Dia'.
+--
+-- Should obey for any @t@: @valid (t \<-\> dnf t)@
+--
+-- >>> dnf $ Neg (a --> Box b \/ (a --> c))
+-- "a" /\ Neg "c" /\ Neg (Box "b")
+dnf :: Prop -> Prop
+dnf p = foldr1' (/\) T [foldr1' (\/) F q | q <- dnf' p]
 
 -- | 'a', 'b', 'c', 'd', 'p', 'q', 'r', 's', 't' are convenience
 -- definitions for @Letter "a"@ and so on.
