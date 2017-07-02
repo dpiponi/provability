@@ -31,6 +31,7 @@ module Provability(interp,
                    fixedpoint,
                    beth,
                    simplify,
+                   canonical,
                    a, b, c, d, p, q, r, s, t) where
 
 import Control.Applicative
@@ -38,8 +39,11 @@ import Control.Arrow
 import Control.Monad
 import Data.Function
 import Data.List
+import Data.Either
 import Data.Maybe
 import Text.Show
+import Debug.Trace
+import Test.QuickCheck
 
 infixr 1 :->
 infixr 2 :\/
@@ -98,6 +102,39 @@ instance Show Prop where
     showsPrec p (Letter n) = showParen (p>5) $ showsPrec 6 n
     showsPrec p T          = showString "T"
     showsPrec p F          = showString "F"
+
+newtype SingleLetter = SingleLetter String deriving Show
+
+instance Arbitrary SingleLetter where
+    arbitrary = oneof $ map (\x -> return (SingleLetter [x])) ['a'..'z']
+
+letter = do
+    SingleLetter l <- arbitrary
+    return $ Letter l
+
+tree' True 0 = oneof [return T, return F, letter]
+tree' False 0 = oneof [return T, return F]
+tree' allowed n = oneof [tree1 allowed n, tree2 allowed n]
+
+tree1 allowed n = do
+    a <- tree' allowed (n-1)
+    oneof [return $ Box a, return $ Dia a]
+
+tree2 allowed n = do
+    i <- choose (0, n-1)
+    a <- tree' allowed i
+    b <- tree' allowed (n-1-i)
+    oneof [return $ a :\/ b, return $ a :/\ b, return $ a :-> b]
+
+instance Arbitrary Prop where
+    arbitrary = sized (tree' True)
+
+newtype LetterFree = LetterFree Prop deriving Show
+
+instance Arbitrary LetterFree where
+    arbitrary = do
+        p <- sized (tree' False)
+        return (LetterFree p)
 
 -- | Performs basic simplification of propositions.
 --
@@ -211,7 +248,138 @@ foldr1' m _ a = foldr1 m a
 -- >>> dnf $ Neg (a --> Box b \/ (a --> c))
 -- "a" /\ Neg "c" /\ Neg (Box "b")
 dnf :: Prop -> Prop
-dnf p = foldr1' (/\) T [foldr1' (\/) F q | q <- dnf' p]
+dnf p0 = let p = simplify p0 in foldr1' (/\) T [foldr1' (\/) F q | q <- dnf' p]
+
+{-
+-- CNegBox n = ¬□ⁿ⊥ (n >= 1)
+-- CBox n = □ⁿ⊥     (n >= 0)
+-- CBox 0 = ⊥
+-- CTrue = ⊤
+data BoxCanonical = CNegBox Int | CBox Int | CTrue
+
+toBoxCanonical :: Prop -> BoxCanonical
+toBoxCanonical (propType -> Conjunction a b) = 
+    case (toBoxCanonical a, toBoxCanonical b) of
+        (CTrue, _) -> CTrue
+        (_, CTrue) -> CTrue
+        (CNegBox m, CNegBox n) -> CNegBox (max m n)
+        (CNegBox m, CBox n) -> CBox 0
+        (CBox m, CNegBox n) -> CBox 0
+        (CBox m, gBox n) -> CBox (min m n)
+
+toBoxCanonical (propType -> Disjunction a b) = 
+    case (toBoxCanonical a, toBoxCanonical b) of
+        (CTrue, _) -> CTrue
+        (_, CTrue) -> CTrue
+        (CNegBox m, CNegBox n) -> CNegBox (max m n)
+        (CNegBox m, CBox n) | m <= n -> CBox 0
+        (CNegBox m, CBox n) | m > n -> CBox n
+        (CBox m, CNegBox n) | m >= n -> CBox 0
+        (CBox m, CNegBox n) | m < n -> CBox n
+        (CBox m, gBox n) -> CBox (min m n)
+
+toBoxCanonical (propType -> Provability a) =
+    case toBoxCanonical a of
+        CTrue -> CTrue
+        CBox m -> CBox (m+1)
+        CNegBox m -> Box F
+
+toBoxCanonical (propType -> Consistency a) =
+    case toBoxCanonical a of
+        CTrue -> 
+        CBox m -> 
+        CNegBox m -> 
+
+
+toBoxCanonical (propType -> DoubleNegation a) = toBoxCanonical a
+toBoxCanonical a = a
+-}
+
+countBoxes :: Prop -> (Int, Prop)
+countBoxes (Box p) =
+    let (n, p') = countBoxes p' in (n+1, p')
+countBoxes p = (0, p)
+
+data Reduced = RTrue | RNeg Int | RPos Int deriving (Show, Eq, Ord)
+
+reducedToProp :: Reduced -> Prop
+reducedToProp RTrue = T
+reducedToProp (RNeg n) = Neg (reducedToProp (RPos n))
+reducedToProp (RPos 0) = F
+reducedToProp (RPos n) = Box (reducedToProp (RPos (n-1)))
+
+-- XXX boxCount needs to handle 'T'
+boxCount :: Prop -> Reduced
+boxCount (Neg p) =
+    case boxCount p of
+        RPos n -> RNeg n
+        RTrue -> RPos 0
+        e -> error $ "boxCount (1): " ++ show e
+boxCount F = RPos 0
+boxCount (Box p) =
+    case boxCount p of
+        RTrue -> RTrue
+        RPos n -> RPos (n+1)
+boxCount T = RTrue
+boxCount a = error (show a)
+
+boxCounts :: [Reduced] -> Maybe ([Int], [Int])
+boxCounts [] = Just ([], [])
+boxCounts (RTrue : _) = Nothing
+boxCounts (p : ps) = case boxCounts ps of
+    Nothing -> Nothing
+    Just (ns, ms) -> case p of
+        RPos n -> Just (n : ns, ms)
+        RNeg m -> Just (ns, m : ms)
+
+church :: Int -> (a -> a) -> a -> a
+church 0 f x = x
+church n f x = church (n-1) f (f x)
+
+reduce :: ([Int], [Int]) -> Prop
+reduce ([], ms) = reduce ([0], ms)
+reduce (ns, ms) =
+    let n = foldr1 max ns
+    in if null ms
+        then church (n+1) Box F
+        else
+            let m = foldr1 min ms
+            in if m <= n
+                then T
+                else church (n+1) Box F
+
+reduce' :: Maybe ([Int], [Int]) -> Prop
+reduce' Nothing = T
+reduce' (Just a) = reduce a
+
+reduceFactor :: [Prop] -> Prop
+reduceFactor ts = reduce' (boxCounts (map boxCount ts))
+
+-- Get Box p into canonical form
+boxCanonical :: Prop -> Prop
+boxCanonical p = 
+    let d = dnf' p
+    in foldr (:/\) T (map reduceFactor d)
+
+testCanonical :: Prop -> IO ()
+testCanonical p = do
+    let c = canonical p
+    print c
+    print $ valid $ p <-> c
+
+canonical' :: Prop -> Prop
+canonical' (Box p) = boxCanonical (canonical p)
+canonical' (Dia p) = canonical (Neg (Box (Neg p)))
+canonical' (a :\/ b) = canonical a :\/ canonical b
+canonical' (a :/\ b) = canonical a :/\ canonical b
+canonical' (a :-> b) = canonical a :-> canonical b
+canonical' (Neg a) = Neg (canonical a)
+canonical' a@(Letter _) = a
+canonical' a@T = a
+canonical' a@F = a
+
+canonical :: Prop -> Prop
+canonical = simplify . canonical' . simplify
 
 -- | 'a', 'b', 'c', 'd', 'p', 'q', 'r', 's', 't' are convenience
 -- definitions for @Letter "a"@ and so on.
