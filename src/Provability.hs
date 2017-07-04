@@ -9,6 +9,10 @@ This means that checking whether a proposition is a theorem is computable.
 This module provides tools to test whether a proposition of GL is a theorem.
 It also provides a tool for finding fixed points in GL, i.e. propositions @P@ solving an equation of the form @P \<-\> f(P)@, for suitable logical functions @f@.
 
+Note that the tests may take a long time to run.
+The sun might become a red giant first.
+I'll uses shorter examples eventually.
+
 Refs:
 
 * https://plato.stanford.edu/entries/logic-provability/
@@ -25,6 +29,8 @@ Refs:
 {-# LANGUAGE ViewPatterns #-}
 module Provability(interp,
                    valid,
+                   value,
+                   value',
                    dnf,
                    Prop(..),
                    (\/), (/\), (-->), (<--), (<->),
@@ -32,18 +38,22 @@ module Provability(interp,
                    beth,
                    simplify,
                    canonical,
+                   module NatSet,
                    a, b, c, d, p, q, r, s, t) where
 
-import Control.Applicative
+import Control.Applicative hiding (empty)
 import Control.Arrow
 import Control.Monad
 import Data.Function
-import Data.List
+import Data.List hiding (union)
 import Data.Either
 import Data.Maybe
 import Text.Show
 import Debug.Trace
-import Test.QuickCheck
+import Test.QuickCheck hiding ((.&.))
+--import qualified NatSet as N
+import NatSet
+import qualified Data.Bits as B
 
 infixr 1 :->
 infixr 2 :\/
@@ -224,6 +234,37 @@ instance PropTypeable Prop where
     negative (Neg _)          = True
     negative _                = False
 
+-- | This is the valuation from the letterless propositions to the finite or cofinite subsets of
+-- the naturals
+-- described on page 95 of Boolos
+--
+-- >>> value (Box (Box F))
+-- Finite (fromList [0,1])
+value :: Prop -> NatSet
+value (propType -> Constant F) = empty
+value (propType -> Constant T) = naturals
+value (propType -> Disjunction a b) = value a `union` value b
+value (propType -> Conjunction a b) = value a `intersection` value b
+value (propType -> DoubleNegation a) = value a
+value (propType -> Provability a) = segment (value a)
+value (propType -> Consistency a) = complement $ segment $ complement $ value a
+
+-- | This is the valuation from the letterless propositions to the finite or cofinite subsets of the naturals
+-- described on page 95 of Boolos
+-- but with the subsets of the naturals interpreted as bitsets encoded
+-- as integers.
+--
+-- >>> value' (Box (Box F))
+-- 3
+value' :: Prop -> Int
+value' (propType -> Constant F) = 0
+value' (propType -> Constant T) = -1
+value' (propType -> Disjunction a b) = value' a B..|. value' b
+value' (propType -> Conjunction a b) = value' a B..&. value' b
+value' (propType -> DoubleNegation a) = value' a
+value' (propType -> Provability a) = let m = value' a in m `B.xor` (m+1)
+value' (propType -> Consistency a) = let m = B.complement (value' a) in B.complement (m `B.xor` (m+1))
+
 rmdups :: (Ord a) => [a] -> [a]
 rmdups = map head . group . sort
 
@@ -249,51 +290,6 @@ foldr1' m _ a = foldr1 m a
 -- "a" /\ Neg "c" /\ Neg (Box "b")
 dnf :: Prop -> Prop
 dnf p0 = let p = simplify p0 in foldr1' (/\) T [foldr1' (\/) F q | q <- dnf' p]
-
-{-
--- CNegBox n = ¬□ⁿ⊥ (n >= 1)
--- CBox n = □ⁿ⊥     (n >= 0)
--- CBox 0 = ⊥
--- CTrue = ⊤
-data BoxCanonical = CNegBox Int | CBox Int | CTrue
-
-toBoxCanonical :: Prop -> BoxCanonical
-toBoxCanonical (propType -> Conjunction a b) = 
-    case (toBoxCanonical a, toBoxCanonical b) of
-        (CTrue, _) -> CTrue
-        (_, CTrue) -> CTrue
-        (CNegBox m, CNegBox n) -> CNegBox (max m n)
-        (CNegBox m, CBox n) -> CBox 0
-        (CBox m, CNegBox n) -> CBox 0
-        (CBox m, gBox n) -> CBox (min m n)
-
-toBoxCanonical (propType -> Disjunction a b) = 
-    case (toBoxCanonical a, toBoxCanonical b) of
-        (CTrue, _) -> CTrue
-        (_, CTrue) -> CTrue
-        (CNegBox m, CNegBox n) -> CNegBox (max m n)
-        (CNegBox m, CBox n) | m <= n -> CBox 0
-        (CNegBox m, CBox n) | m > n -> CBox n
-        (CBox m, CNegBox n) | m >= n -> CBox 0
-        (CBox m, CNegBox n) | m < n -> CBox n
-        (CBox m, gBox n) -> CBox (min m n)
-
-toBoxCanonical (propType -> Provability a) =
-    case toBoxCanonical a of
-        CTrue -> CTrue
-        CBox m -> CBox (m+1)
-        CNegBox m -> Box F
-
-toBoxCanonical (propType -> Consistency a) =
-    case toBoxCanonical a of
-        CTrue -> 
-        CBox m -> 
-        CNegBox m -> 
-
-
-toBoxCanonical (propType -> DoubleNegation a) = toBoxCanonical a
-toBoxCanonical a = a
--}
 
 countBoxes :: Prop -> (Int, Prop)
 countBoxes (Box p) =
@@ -335,6 +331,10 @@ boxCounts (p : ps) = case boxCounts ps of
 church :: Int -> (a -> a) -> a -> a
 church 0 f x = x
 church n f x = church (n-1) f (f x)
+
+boxes :: Int -> Prop -> Prop
+boxes 0 p = p
+boxes n p = boxes (n-1) (Box p)
 
 reduce :: ([Int], [Int]) -> Prop
 reduce ([], ms) = reduce ([0], ms)
@@ -380,6 +380,23 @@ canonical' a@F = a
 
 canonical :: Prop -> Prop
 canonical = simplify . canonical' . simplify
+
+missingSegments :: [Int] -> ([(Int, Int)], Maybe Int)
+missingSegments [] = ([], Just 0)
+missingSegments (0 : as) = collectSegments [] as 1
+missingSegments (a : as) = collectSegments [(0, a)] as (a+1)
+
+collectSegments :: [(Int, Int)] -> [Int] -> Int -> ([(Int, Int)], Maybe Int)
+collectSegments segs [a] n = (segs, Just (a+1))
+collectSegments segs (a : as) n | a > n = collectSegments (segs ++ [(n, a)]) as (a+1)
+                                | otherwise = collectSegments segs as (a+1)
+
+{-
+ missingSegments [0, 1, 3]
+    = collectSegments [] [1, 3] 1
+    = collectSegments [] [3] 2
+    = collectSegments 
+ -}
 
 -- | 'a', 'b', 'c', 'd', 'p', 'q', 'r', 's', 't' are convenience
 -- definitions for @Letter "a"@ and so on.

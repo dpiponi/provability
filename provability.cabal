@@ -15,8 +15,8 @@ cabal-version:       >=1.10
 
 library
   hs-source-dirs:      src
-  exposed-modules:     Provability
-  build-depends:       base >= 4.7 && < 5, QuickCheck
+  exposed-modules:     Provability, NatSet
+  build-depends:       base >= 4.7 && < 5, QuickCheck, containers
   default-language:    Haskell2010
 
 --executable provability-exe
@@ -34,6 +34,8 @@ test-suite provability-test
   build-depends:       base
                      , provability
                      , QuickCheck
+                     , containers
+                     , NatSet
   ghc-options:         -threaded -rtsopts -with-rtsopts=-N
   default-language:    Haskell2010
 

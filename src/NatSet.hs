@@ -1,4 +1,12 @@
-module NatSet where
+module NatSet(NatSet(..),
+              fromList,
+              naturals,
+              empty,
+              (\\),
+              intersection,
+              union,
+              complement,
+              segment) where
 
 import qualified Data.IntSet as I
 
@@ -8,7 +16,10 @@ fromList :: [Int] -> NatSet
 fromList = Finite . I.fromList
 
 naturals :: NatSet
-naturals = Cofinite (I.fromList [])
+naturals = Cofinite I.empty
+
+empty :: NatSet
+empty = Finite I.empty
 
 (\\) :: NatSet -> NatSet -> NatSet
 Finite a   \\ Finite b   = Finite (a I.\\ b)
