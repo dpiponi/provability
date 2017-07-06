@@ -35,7 +35,7 @@ Find fixed point for p in p ↔ ¬□p:
     
 Evaluate the valuation I describe at https://plus.google.com/+DanPiponi/posts/RpwQAD4jTrb   
    
-    > value' $ value' $ Neg (Box F) <-> Neg (Box (Neg (Box F)))
+    > value' $ Neg (Box F) <-> Neg (Box (Neg (Box F)))
     -1    
 
 Refs:
