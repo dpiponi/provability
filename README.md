@@ -33,9 +33,9 @@ Find fixed point for p in p ↔ ¬□p:
     > fixedpoint $ \p -> Neg (Box p)
     Dia T
     
-Evaluate the valuation I describe at https://plus.google.com/+DanPiponi/posts/RpwQAD4jTrb   
+Evaluate the valuation I describe at https://plus.google.com/+DanPiponi/posts/RpwQAD4jTrb on ¬□p ↔ ¬□(¬□⊥)
    
-    > value' $ Neg (Box F) <-> Neg (Box (Neg (Box F))) -- Godel's Theorem
+    > value' $ Neg (Box F) <-> Neg (Box (Neg (Box F)))
     -1    
 
 Refs:
