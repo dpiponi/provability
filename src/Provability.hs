@@ -248,15 +248,16 @@ value (propType -> Conjunction a b) = value a `intersection` value b
 value (propType -> DoubleNegation a) = value a
 value (propType -> Provability a) = segment (value a)
 value (propType -> Consistency a) = complement $ segment $ complement $ value a
+value (propType -> Atomic _) = error "value can only be applied to the letterless fragment of GL"
 
 -- | This is the valuation from the letterless propositions to the finite or cofinite subsets of the naturals
 -- described on page 95 of Boolos
 -- but with the subsets of the naturals interpreted as bitsets encoded
 -- as integers.
 --
--- >>> value' (Box (Box F))
--- 3
-value' :: Prop -> Int
+-- >>> value' $ value' $ Neg (Box F) <-> Neg (Box (Neg (Box F)))
+-- -1
+value' :: Prop -> Integer
 value' (propType -> Constant F) = 0
 value' (propType -> Constant T) = -1
 value' (propType -> Disjunction a b) = value' a B..|. value' b
@@ -264,6 +265,7 @@ value' (propType -> Conjunction a b) = value' a B..&. value' b
 value' (propType -> DoubleNegation a) = value' a
 value' (propType -> Provability a) = let m = value' a in m `B.xor` (m+1)
 value' (propType -> Consistency a) = let m = B.complement (value' a) in B.complement (m `B.xor` (m+1))
+value' (propType -> Atomic _) = error "value' can only be applied to the letterless fragment of GL"
 
 rmdups :: (Ord a) => [a] -> [a]
 rmdups = map head . group . sort
