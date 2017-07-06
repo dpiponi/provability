@@ -32,6 +32,11 @@ Find fixed point for p in p ↔ ¬□p:
 
     > fixedpoint $ \p -> Neg (Box p)
     Dia T
+    
+Evaluate the valuation I describe at https://plus.google.com/+DanPiponi/posts/RpwQAD4jTrb   
+   
+    > value' $ value' $ Neg (Box F) <-> Neg (Box (Neg (Box F)))
+    -1    
 
 Refs:
 
@@ -40,3 +45,4 @@ Refs:
 * The Logic of Provability, George Boolos, Cambridge, 1993
 * First Order Logic, Raymond Smullyan, Dover
 * http://blog.sigfpe.com/2011/04/generalising-godels-theorem-with.html
+* https://plus.google.com/+DanPiponi/posts/RpwQAD4jTrb
