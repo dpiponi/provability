@@ -2,6 +2,8 @@
 
 This is a small library for working with Provability Logic.
 
+(Status: This is more or less a "complete" project although I may do more development if I think of something.)
+
 It can:
 
 1. Check a proposition is a theorem
